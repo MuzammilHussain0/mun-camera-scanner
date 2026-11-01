@@ -1,0 +1,157 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MRF MUN 26 - Camera Scanner</title>
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<style>
+body {
+  margin: 0;
+  padding: 20px;
+  background: #f4f1ea;
+  color: #191919;
+  font-family: Arial, sans-serif;
+  text-align: center;
+}
+.card {
+  max-width: 480px;
+  margin: 20px auto;
+  padding: 20px;
+  background: white;
+  border: 1px solid #d9cfb9;
+  border-radius: 14px;
+}
+h2 { font-family: Georgia, serif; }
+button {
+  width: 100%;
+  padding: 14px;
+  margin-top: 12px;
+  border: 0;
+  border-radius: 9px;
+  background: #a58a50;
+  color: #111;
+  font-size: 16px;
+  font-weight: bold;
+  cursor: pointer;
+}
+input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 13px;
+  margin-top: 12px;
+  border: 1px solid #c9c2b4;
+  border-radius: 8px;
+  font-size: 16px;
+}
+#reader {
+  width: 100%;
+  margin-top: 15px;
+}
+#status {
+  margin-top: 15px;
+  padding: 12px;
+  border-radius: 8px;
+  background: #eee9dc;
+  overflow-wrap: anywhere;
+}
+</style>
+</head>
+<body>
+<div class="card">
+  <h2>MRF MUN 26</h2>
+  <p>Ticket QR Scanner</p>
+
+  <div id="reader"></div>
+
+  <button id="startButton" onclick="startCamera()">
+    Start Camera
+  </button>
+
+  <p id="status">Press Start Camera and allow camera access.</p>
+
+  <input id="manualId" placeholder="Enter ticket ID manually">
+  <button onclick="sendManual()">Submit Ticket ID</button>
+</div>
+
+<script>
+let scanner = null;
+let scanning = false;
+let sent = false;
+
+function showStatus(message) {
+  document.getElementById("status").textContent = message;
+}
+
+async function startCamera() {
+  if (!window.opener || window.opener.closed) {
+    showStatus("Please open this scanner using the camera button in your MUN registration page.");
+    return;
+  }
+
+  if (scanning) return;
+
+  if (typeof Html5Qrcode === "undefined") {
+    showStatus("Scanner library failed to load. Check your internet connection and refresh.");
+    return;
+  }
+
+  scanner = new Html5Qrcode("reader");
+
+  try {
+    await scanner.start(
+      { facingMode: "environment" },
+      {
+        fps: 10,
+        qrbox: { width: 230, height: 230 }
+      },
+      async (decodedText) => {
+        if (sent) return;
+        sent = true;
+
+        await scanner.stop();
+        scanning = false;
+
+        sendTicket(decodedText);
+      },
+      () => {}
+    );
+
+    scanning = true;
+    showStatus("Camera active. Point it at the ticket QR code.");
+
+  } catch (error) {
+    showStatus("Camera could not start. Check browser camera permission and try again. " + error);
+  }
+}
+
+function sendTicket(ticketId) {
+  if (!window.opener || window.opener.closed) {
+    showStatus("The registration page is no longer open.");
+    return;
+  }
+
+  window.opener.postMessage({
+    type: "MUN_TICKET_SCAN",
+    ticketId: String(ticketId).trim()
+  }, "*");
+
+  showStatus("Ticket sent to MUN registration system!");
+
+  setTimeout(() => window.close(), 900);
+}
+
+function sendManual() {
+  const id = document.getElementById("manualId").value.trim();
+
+  if (!id) {
+    showStatus("Please enter a ticket ID.");
+    return;
+  }
+
+  sendTicket(id);
+}
+</script>
+</body>
+</html>
